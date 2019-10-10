@@ -59,8 +59,18 @@ int main(int argc, char* argv[])
 void stencil(const int nx, const int ny, const int width, const int height,
              double* image, double* tmp_image)
 {
-  for (int j = 1; j < ny + 1; ++j) {
+  /*for (int j = 1; j < ny + 1; ++j) {
     for (int i = 1; i < nx + 1; ++i) {
+      tmp_image[j + i * height] =  image[j     + i       * height] * 3.0 / 5.0;
+      tmp_image[j + i * height] += image[j     + (i - 1) * height] * 0.5 / 5.0;
+      tmp_image[j + i * height] += image[j     + (i + 1) * height] * 0.5 / 5.0;
+      tmp_image[j + i * height] += image[j - 1 + i       * height] * 0.5 / 5.0;
+      tmp_image[j + i * height] += image[j + 1 + i       * height] * 0.5 / 5.0;
+    }
+  }*/
+
+ for (int i = 1; i < ny + 1; ++i) {
+    for (int j = 1; j < nx + 1; ++j) {
       tmp_image[j + i * height] =  image[j     + i       * height] * 3.0 / 5.0;
       tmp_image[j + i * height] += image[j     + (i - 1) * height] * 0.5 / 5.0;
       tmp_image[j + i * height] += image[j     + (i + 1) * height] * 0.5 / 5.0;
