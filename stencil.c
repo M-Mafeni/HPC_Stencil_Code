@@ -73,11 +73,12 @@ void stencil(const int nx, const int ny, const int width, const int height,
     for (int j = 1; j < nx + 1; ++j) {
       float a = 3.0 / 5.0;
       float b = 0.5 / 5.0;
-      tmp_image[j + i * height] =  image[j     + i       * height] * a;
+     /* tmp_image[j + i * height] =  image[j     + i       * height] * a;
       tmp_image[j + i * height] += image[j     + (i - 1) * height] * b;
       tmp_image[j + i * height] += image[j     + (i + 1) * height] * b;
       tmp_image[j + i * height] += image[j - 1 + i       * height] * b;
-      tmp_image[j + i * height] += image[j + 1 + i       * height] * b;
+      tmp_image[j + i * height] += image[j + 1 + i       * height] * b;*/
+      tmp_image[j + i * height] =  image[j     + i       * height] * a + image[j     + (i + 1) * height] * b + image[j     + (i + 1) * height] * b + image[j - 1 + i       * height] * b + image[j + 1 + i       * height] * b;
     }
   }
 }
