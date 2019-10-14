@@ -73,15 +73,19 @@ void stencil(const int nx, const int ny, const int width, const int height,
     for (int j = 1; j < nx + 1; ++j) {
       float a = 3.0 / 5.0;
       float b = 0.5 / 5.0;
+      int val_1 = i * height;
      /* tmp_image[j + i * height] =  image[j     + i       * height] * a;
       tmp_image[j + i * height] += image[j     + (i - 1) * height] * b;
       tmp_image[j + i * height] += image[j     + (i + 1) * height] * b;
       tmp_image[j + i * height] += image[j - 1 + i       * height] * b;
       tmp_image[j + i * height] += image[j + 1 + i       * height] * b;*/
-      tmp_image[j + i * height] =  image[j     + i       * height] * a + image[j     + (i + 1) * height] * b + image[j     + (i + 1) * height] * b + image[j - 1 + i       * height] * b + image[j + 1 + i       * height] * b;
+      //tmp_image[j + i * height] =  image[j     + i       * height] * a + image[j     + (i + 1) * height] * b + image[j     + (i - 1) * height] * b + image[j - 1 + i       * height] * b + image[j + 1 + i       * height] * b;
+      tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
+    }
+
     }
   }
-}
+
 
 // Create the input image
 void init_image(const int nx, const int ny, const int width, const int height,
