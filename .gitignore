@@ -2,3 +2,11 @@
 stencil
 *.pgm
 stencil.out
+report_1/report.aux
+report_1/report.bbl
+report_1/report.blg
+report_1/report.log
+report_1/report.pdf
+report_1/report.synctex.gz
+report_1/test.bib
+report_1/*.xlsx
