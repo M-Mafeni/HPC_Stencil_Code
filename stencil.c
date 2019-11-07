@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include "mpi.h"
 
+#define MASTER 0
 // Define output file name
 #define OUTPUT_FILE "stencil.pgm"
 
@@ -20,6 +22,17 @@ int main(int argc, char* argv[])
     fprintf(stderr, "Usage: %s nx ny niters\n", argv[0]);
     exit(EXIT_FAILURE);
   }
+  int rank;               /* 'rank' of process among it's cohort */ 
+  int size;               /* size of cohort, i.e. num processes started */
+  int flag;               /* for checking whether MPI_Init() has been called */
+  int strlen;             /* length of a character array */
+ // enum bool {FALSE,TRUE}; /* enumerated type: false = 0, true = 1 */  
+  char hostname[MPI_MAX_PROCESSOR_NAME];  /* character array to hold hostname running process */
+
+  /* initialise processes */
+  MPI_Init( &argc, &argv );
+  MPI_Comm_size( MPI_COMM_WORLD, &size );
+  MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
   // Initiliase problem dimensions from command line arguments
   int nx = atoi(argv[1]);
@@ -59,16 +72,6 @@ int main(int argc, char* argv[])
 void stencil(const int nx, const int ny, const int width, const int height,
              float* image, float* tmp_image)
 {
-  /*for (int j = 1; j < ny + 1; ++j) {
-    for (int i = 1; i < nx + 1; ++i) {
-      tmp_image[j + i * height] =  image[j     + i       * height] * 3.0 / 5.0;
-      tmp_image[j + i * height] += image[j     + (i - 1) * height] * 0.5 / 5.0;
-      tmp_image[j + i * height] += image[j     + (i + 1) * height] * 0.5 / 5.0;
-      tmp_image[j + i * height] += image[j - 1 + i       * height] * 0.5 / 5.0;
-      tmp_image[j + i * height] += image[j + 1 + i       * height] * 0.5 / 5.0;
-    }
-  }*/
-
  for (int i = 1; i < ny + 1; ++i) {
     for (int j = 1; j < nx + 1; ++j) {
       float a = 0.6;
@@ -82,8 +85,7 @@ void stencil(const int nx, const int ny, const int width, const int height,
       //tmp_image[j + i * height] =  image[j     + i       * height] * a + image[j     + (i + 1) * height] * b + image[j     + (i - 1) * height] * b + image[j - 1 + i       * height] * b + image[j + 1 + i       * height] * b;
       tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
     }
-
-    }
+       }
   }
 
 

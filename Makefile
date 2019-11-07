@@ -1,3 +1,3 @@
 stencil: stencil.c
-	icc -fast  -std=c99 -pg -Wall $^ -o $@
+	mpiicc -std=c99 -Wall $^ -o $@
 
