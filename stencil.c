@@ -7,8 +7,7 @@
 // Define output file name
 #define OUTPUT_FILE "stencil.pgm"
 
-void stencil(const int nx, const int ny, const int width, const int height,
-             float* image, float* tmp_image);
+void stencil(int rank,int size, MPI_Status *status,const int ncols, const int ny, const int width, const int height, float* loc_image, float* loc_tmp_image);
 void init_image(const int nx, const int ny, const int width, const int height,
                 float* image, float* tmp_image);
 void output_image(const char* file_name, const int nx, const int ny,
@@ -72,8 +71,8 @@ int main(int argc, char* argv[])
   // Call the stencil kernel
   double tic = wtime();
   for (int t = 0; t < niters; ++t) {
-    stencil(nx, ny, width, height, image, tmp_image);
-    stencil(nx, ny, width, height, tmp_image, image);
+    stencil(rank,size,&status,nx, ny, width, height, loc_image, loc_tmp_image);
+    stencil(rank,size,&status,nx, ny, width, height, loc_tmp_image, loc_image);
   }
   double toc = wtime();
 
@@ -87,24 +86,35 @@ int main(int argc, char* argv[])
   free(tmp_image);
 }
 
-void stencil(const int nx, const int ny, const int width, const int height,
-             float* image, float* tmp_image)
+void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int width, const int height,float* loc_image, float* loc_tmp_image)
+
 {
+ int leftNeighbour = (rank == MASTER) ? (rank + size - 1 % size) : (rank - 1);
+ int rightNeighbour = (rank + 1) % size; 
  for (int i = 1; i < ny + 1; ++i) {
-    for (int j = 1; j < nx + 1; ++j) {
+    for (int j = 0; j < ncols; ++j) {
       float a = 0.6;
       float b = 0.1;
       int val_1 = i * height;
-     /* tmp_image[j + i * height] =  image[j     + i       * height] * a;
-      tmp_image[j + i * height] += image[j     + (i - 1) * height] * b;
-      tmp_image[j + i * height] += image[j     + (i + 1) * height] * b;
-      tmp_image[j + i * height] += image[j - 1 + i       * height] * b;
-      tmp_image[j + i * height] += image[j + 1 + i       * height] * b;*/
-      //tmp_image[j + i * height] =  image[j     + i       * height] * a + image[j     + (i + 1) * height] * b + image[j     + (i - 1) * height] * b + image[j - 1 + i       * height] * b + image[j + 1 + i       * height] * b;
-      tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
-    }
+     // tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
+      loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height]);// + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
+      float fromLeft; //toRight
+      float fromRight; //toLeft
+      if(j == 0){
+       if(rank % 2 == 0){
+         MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+         fromLeft = loc_image[(ncols - 1) + val_1];
+       }else{
+         fromRight = loc_image[(ncols - 1) + val_1];
+         MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
+                      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
        }
-  }
+      }
+      if(j == ncols - 1){
+      }
+    }
+  } 
+}
 
 
 // Create the input image
