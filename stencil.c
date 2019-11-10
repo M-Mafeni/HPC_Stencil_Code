@@ -52,20 +52,21 @@ int main(int argc, char* argv[])
   if(rank == MASTER){
     // Set the input image
     init_image(nx, ny, width, height, image, tmp_image);
-    MPI_Scatter(image,(width * height),MPI_FLOAT,MPI_IN_PLACE,(width * height),MPI_FLOAT,MASTER,MPI_COMM_WORLD);
   }
   //initialise values for process
   int ncols = calc_ncols_from_rank(rank,size,nx);
   int loc_width = ncols + 2;
   float* loc_image = malloc(sizeof(float) * ncols * height);
   float* loc_tmp_image = malloc(sizeof(float) * ncols * height);
+  MPI_Scatter(image,sizeof(float)*(width * height),MPI_FLOAT,loc_image,sizeof(float)*(ncols * height),MPI_FLOAT,MASTER,MPI_COMM_WORLD);
+ MPI_Scatter(tmp_image,sizeof(float)*(width * height),MPI_FLOAT,loc_tmp_image,sizeof(float)*(ncols * height),MPI_FLOAT,MASTER,MPI_COMM_WORLD);
   //initialise both loc_image and tmp loc_image
-  for(int i = 0; i < ny+2; i++){
+ /* for(int i = 0; i < ny+2; i++){
     for(int j = 0; j < ncols; j++){
       loc_image[j + i * height] = image[(j + i * height) + ncols * rank];
       loc_tmp_image[j + i * height] = tmp_image[(j + i * height) + ncols * rank];
     }
-  }  
+  }*/  
 
 
   // Call the stencil kernel
@@ -75,13 +76,15 @@ int main(int argc, char* argv[])
     stencil(rank,size,&status,nx, ny, width, height, loc_tmp_image, loc_image);
   }
   double toc = wtime();
-
-  // Output
-  printf("------------------------------------\n");
-  printf(" runtime: %lf s\n", toc - tic);
-  printf("------------------------------------\n");
-
-  output_image(OUTPUT_FILE, nx, ny, width, height, image);
+  MPI_Gather(loc_image,(ncols * height),MPI_FLOAT,
+             image, (ncols*height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
+  if(rank == MASTER){
+    // Output
+    printf("------------------------------------\n");
+    printf(" runtime: %lf s\n", toc - tic);
+    printf("------------------------------------\n");
+    output_image(OUTPUT_FILE, nx, ny, width, height, image);
+  }
   free(image);
   free(tmp_image);
 }
@@ -97,40 +100,46 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       float b = 0.1;
       int val_1 = i * height;
      // tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
-      loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height]);// + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
       float fromLeft; //toRight
       float fromRight; //toLeft
-      if(j == 0){
-       if(rank % 2 == 0){
-         fromLeft = loc_image[(ncols - 1) + val_1];
-         MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
-         MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
-         if(rank == MASTER) fromRight = 0;
-         loc_tmp_image[j+val_1] += fromRight;
-       }else{
-         fromRight = loc_image[(ncols - 1) + val_1];
-         MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
-                      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
-         loc_tmp_image[j+val_1] += fromLeft;
+      if(j == 0 || j == ncols - 1){
+      loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height]);// + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
+        if(j == 0){
+	       if(rank % 2 == 0){
+		 fromLeft = loc_image[(ncols - 1) + val_1];
+		 MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+		 MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+		 if(rank == MASTER) fromRight = 0;
+		 loc_tmp_image[j+val_1] += fromRight;
+	       }else{
+		 fromRight = loc_image[(ncols - 1) + val_1];
+		 MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
+			      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+		 loc_tmp_image[j+val_1] += fromLeft;
+	       }
+	      }
+	      if(j == ncols - 1){
+		if(rank % 2 == 0){
+		  fromLeft = loc_image[val_1];          
+		  MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+		  MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+		  if(rank == size - 1) fromRight = 0;
+		  loc_tmp_image[j+val_1] += fromRight;
+		}
+		else{
+		 fromRight = loc_image[(ncols - 1) + val_1];
+		 MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
+			      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+		 if(rank == size - 1) fromLeft = 0;
+		 loc_tmp_image[j+val_1] += fromLeft;
+		}
+	      }
+       }else{ 
+          loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
        }
-      }
-      if(j == ncols - 1){
-        if(rank % 2 == 0){
-          fromLeft = loc_image[val_1];          
-          MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
-          MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
-          if(rank == size - 1) fromRight = 0;
-          loc_tmp_image[j+val_1] += fromRight;
-        }
-        else{
-         fromRight = loc_image[(ncols - 1) + val_1];
-         MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
-                      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
-         if(rank == size - 1) fromLeft = 0;
-         loc_tmp_image[j+val_1] += fromLeft;
-        }
-      }
-    }
+
+         
+     }
   } 
 }
 
