@@ -102,15 +102,33 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       float fromRight; //toLeft
       if(j == 0){
        if(rank % 2 == 0){
-         MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
          fromLeft = loc_image[(ncols - 1) + val_1];
+         MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+         MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+         if(rank == MASTER) fromRight = 0;
+         loc_tmp_image[j+val_1] += fromRight;
        }else{
          fromRight = loc_image[(ncols - 1) + val_1];
          MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
                       &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+         loc_tmp_image[j+val_1] += fromLeft;
        }
       }
       if(j == ncols - 1){
+        if(rank % 2 == 0){
+          fromLeft = loc_image[val_1];          
+          MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+          MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+          if(rank == size - 1) fromRight = 0;
+          loc_tmp_image[j+val_1] += fromRight;
+        }
+        else{
+         fromRight = loc_image[(ncols - 1) + val_1];
+         MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
+                      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+         if(rank == size - 1) fromLeft = 0;
+         loc_tmp_image[j+val_1] += fromLeft;
+        }
       }
     }
   } 
