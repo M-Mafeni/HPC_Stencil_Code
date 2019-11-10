@@ -14,6 +14,7 @@ void init_image(const int nx, const int ny, const int width, const int height,
 void output_image(const char* file_name, const int nx, const int ny,
                   const int width, const int height, float* image);
 double wtime(void);
+int calc_ncols_from_rank(int rank, int size,int nx);
 
 int main(int argc, char* argv[])
 {
@@ -26,6 +27,7 @@ int main(int argc, char* argv[])
   int size;               /* size of cohort, i.e. num processes started */
   int flag;               /* for checking whether MPI_Init() has been called */
   int strlen;             /* length of a character array */
+  MPI_Status status;
  // enum bool {FALSE,TRUE}; /* enumerated type: false = 0, true = 1 */  
   char hostname[MPI_MAX_PROCESSOR_NAME];  /* character array to hold hostname running process */
 
@@ -45,11 +47,27 @@ int main(int argc, char* argv[])
   int height = ny + 2;
 
   // Allocate the image
-  float* image = malloc(sizeof(float) * width * height);
-  float* tmp_image = malloc(sizeof(float) * width * height);
+   float* image = malloc(sizeof(float) * width * height);
+   float* tmp_image = malloc(sizeof(float) * width * height);
+   
+  if(rank == MASTER){
+    // Set the input image
+    init_image(nx, ny, width, height, image, tmp_image);
+    MPI_Scatter(image,(width * height),MPI_FLOAT,MPI_IN_PLACE,(width * height),MPI_FLOAT,MASTER,MPI_COMM_WORLD);
+  }
+  //initialise values for process
+  int ncols = calc_ncols_from_rank(rank,size,nx);
+  int loc_width = ncols + 2;
+  float* loc_image = malloc(sizeof(float) * ncols * height);
+  float* loc_tmp_image = malloc(sizeof(float) * ncols * height);
+  //initialise both loc_image and tmp loc_image
+  for(int i = 0; i < ny+2; i++){
+    for(int j = 0; j < ncols; j++){
+      loc_image[j + i * height] = image[(j + i * height) + ncols * rank];
+      loc_tmp_image[j + i * height] = tmp_image[(j + i * height) + ncols * rank];
+    }
+  }  
 
-  // Set the input image
-  init_image(nx, ny, width, height, image, tmp_image);
 
   // Call the stencil kernel
   double tic = wtime();
@@ -159,4 +177,16 @@ double wtime(void)
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return tv.tv_sec + tv.tv_usec * 1e-6;
+}
+int calc_ncols_from_rank(int rank, int size,int nx)
+{
+  int ncols;
+
+  ncols = nx / size;       /* integer division */
+  if ((nx % size) != 0) {  /* if there is a remainder */
+    if (rank == size - 1)
+      ncols += nx % size;  /* add remainder to last rank */
+  }
+  
+  return ncols;
 }
