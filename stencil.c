@@ -54,29 +54,34 @@ int main(int argc, char* argv[])
     init_image(nx, ny, width, height, image, tmp_image);
   }
   //initialise values for process
- // printf("about to calc ncols rank %d \n",rank);
+  printf("about to calc ncols rank %d \n",rank);
   int ncols = calc_ncols_from_rank(rank,size,width);
   //array to store ncol numbers
-  int *col_numbers = malloc(sizeof(int) * size);
-  MPI_Gather(&ncols,1,MPI_INT,col_numbers,size,MPI_INT,MASTER,MPI_COMM_WORLD);
-  // send ncols to  master to be stored in col_numbers
- // printf(" rank %d has %d columns\n",rank,ncols);
+  int *col_numbers = NULL;
+  int *displ = malloc(sizeof(int)*size);
+  displ[0] = 0;
+  if(rank == MASTER){
+    col_numbers = malloc(sizeof(int) * size);
+  }
+  MPI_Gather(&ncols,1,MPI_INT,col_numbers,1,MPI_INT,MASTER,MPI_COMM_WORLD);
+  if(rank == MASTER) printf("col__numbers: %d %d %d %d \n",col_numbers[0],col_numbers[1],col_numbers[2],col_numbers[3]);
   int loc_width = ncols + 2;
   float* loc_image = malloc(sizeof(float) * ncols * height);
   float* loc_tmp_image = malloc(sizeof(float) * ncols * height);
- // printf("about to scatter, rank %d \n",rank);
- // scatter image based on col_numbers
-  MPI_Scatterv(image,col_numbers,col_numbers,MPI_FLOAT,loc_image,col_numbers[rank],MPI_FLOAT,MASTER,MPI_COMM_WORLD);
- // MPI_Scatter(&image[0],sizeof(float) *(ncols * height),MPI_FLOAT,&loc_image[0],(sizeof(float)*(ncols * height)),MPI_FLOAT,MASTER,MPI_COMM_WORLD);
-  //MPI_Scatter(tmp_image,sizeof(float)*(width * height),MPI_FLOAT,loc_tmp_image,(sizeof(float)*(width * height))/size,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
-  //MPI_Bcast(image,sizeof(float)*width * height,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
-  //initialise both loc_image and tmp loc_image
-  /*for(int i = 0; i < ny+2; i++){
-    for(int j = 0; j < ncols; j++){
-      loc_image[j + i * height] = image[(j + i * height) + ncols * rank];
-      loc_tmp_image[j + i * height] = tmp_image[(j + i * height) + ncols * rank];
-    }
-  } */ 
+  if(rank == MASTER){
+     printf("splitting grid in MASTER\n");
+     for(int dest = 1; dest < size; dest++){
+       int displacement = col_numbers[dest-1];
+       printf("sending part to rank %d, displacement %d \n",dest,displacement);
+       MPI_Send(&image[displacement * height],displacement * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
+       printf("message sent to rank %d\n",dest);
+     }
+   }else{
+     printf("about to receive from master, rank %d, ncols %d \n",rank,ncols);
+     MPI_Recv(loc_image,ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
+     printf("received from master, rank %d \n",rank);
+   }
+  }  
 
 
   // Call the stencil kernel
