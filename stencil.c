@@ -7,7 +7,7 @@
 // Define output file name
 #define OUTPUT_FILE "stencil.pgm"
 
-void stencil(int rank,int size, MPI_Status *status,const int ncols, const int ny, const int width, const int height, float* loc_image, float* loc_tmp_image);
+void stencil(int rank,int size, MPI_Status *status,const int ncols, const int ny, const int width, const int height, float* loc_image, float* loc_tmp_image,float* sendbuf, float* recvbuf);
 void init_image(const int nx, const int ny, const int width, const int height,
                 float* image, float* tmp_image);
 void output_image(const char* file_name, const int nx, const int ny,
@@ -27,6 +27,8 @@ int main(int argc, char* argv[])
   int flag;               /* for checking whether MPI_Init() has been called */
   int strlen;             /* length of a character array */
   MPI_Status status;
+  float *sendbuf;
+  float *recvbuf;
  // enum bool {FALSE,TRUE}; /* enumerated type: false = 0, true = 1 */  
   char hostname[MPI_MAX_PROCESSOR_NAME];  /* character array to hold hostname running process */
 
@@ -54,8 +56,8 @@ int main(int argc, char* argv[])
     init_image(nx, ny, width, height, image, tmp_image);
   }
   //initialise values for process
-  printf("about to calc ncols rank %d \n",rank);
-  int ncols = calc_ncols_from_rank(rank,size,width);
+ // printf("about to calc ncols rank %d \n",rank);
+  int ncols = calc_ncols_from_rank(rank,size,nx); //nx to ignore padding
   //array to store ncol numbers
   int *col_numbers = NULL;
   int *displ = malloc(sizeof(int)*size);
@@ -64,33 +66,37 @@ int main(int argc, char* argv[])
     col_numbers = malloc(sizeof(int) * size);
   }
   MPI_Gather(&ncols,1,MPI_INT,col_numbers,1,MPI_INT,MASTER,MPI_COMM_WORLD);
-  if(rank == MASTER) printf("col__numbers: %d %d %d %d \n",col_numbers[0],col_numbers[1],col_numbers[2],col_numbers[3]);
+  //if(rank == MASTER) printf("col__numbers: %d %d %d %d \n",col_numbers[0],col_numbers[1],col_numbers[2],col_numbers[3]);
   int loc_width = ncols + 2;
-  float* loc_image = malloc(sizeof(float) * ncols * height);
-  float* loc_tmp_image = malloc(sizeof(float) * ncols * height);
+  float* loc_image = malloc(sizeof(float) * ncols * ny); //ny to ignore padding
+  float* loc_tmp_image = malloc(sizeof(float) * ncols * ny);
   if(rank == MASTER){
      printf("splitting grid in MASTER\n");
      for(int dest = 1; dest < size; dest++){
        int displacement = col_numbers[dest-1];
-       printf("sending part to rank %d, displacement %d \n",dest,displacement);
-       MPI_Send(&image[displacement * height],displacement * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
-       printf("message sent to rank %d\n",dest);
+      // printf("sending part to rank %d, displacement %d \n",dest,displacement);
+       MPI_Send(&image[1 + (displacement+1) * height],displacement * ny,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
+       MPI_Send(&tmp_image[1 + (displacement+1) * height],displacement * ny,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
+      // printf("message sent to rank %d\n",dest);
      }
    }else{
-     printf("about to receive from master, rank %d, ncols %d \n",rank,ncols);
-     MPI_Recv(loc_image,ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
-     printf("received from master, rank %d \n",rank);
+    // printf("about to receive from master, rank %d, ncols %d \n",rank,ncols);
+     MPI_Recv(loc_image,ncols * ny,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
+     MPI_Recv(loc_tmp_image,ncols * ny,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
+   //  printf("received from master, rank %d \n",rank);
    }
-  }  
+    
 
 
   // Call the stencil kernel
-  double tic = wtime();
- printf("testing from rank %d \n",rank);
- /*for (int t = 0; t < niters; ++t) {
-   stencil(rank,size,&status,nx, ny, width, height, loc_image, loc_tmp_image);
-   stencil(rank,size,&status,nx, ny, width, height, loc_tmp_image, loc_image);
-  }*/
+ double tic = wtime();
+ //printf("testing from rank %d \n",rank);
+ sendbuf = malloc(sizeof(float) * height); // you are sending 1 column
+ recvbuf = malloc(sizeof(float) * height); // you are receiving one column
+ for (int t = 0; t < niters; ++t) {
+   stencil(rank,size,&status,nx, ny, width, height, loc_image, loc_tmp_image,sendbuf,recvbuf);
+   stencil(rank,size,&status,nx, ny, width, height, loc_tmp_image, loc_image,sendbuf,recvbuf);
+  }
   double toc = wtime();
   //MPI_Gather(loc_image,(ncols * height),MPI_FLOAT,
   //           image, (ncols*height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
@@ -109,10 +115,10 @@ int main(int argc, char* argv[])
   MPI_Finalize();
 }
 
-void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int width, const int height,float* loc_image, float* loc_tmp_image)
+void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int width, const int height,float* loc_image, float* loc_tmp_image,float* sendbuf, float* recvbuf)
 
 {
- /*int leftNeighbour = (rank == MASTER) ? (rank + size - 1 % size) : (rank - 1);
+ int leftNeighbour = (rank == MASTER) ? (rank + size - 1 % size) : (rank - 1);
  int rightNeighbour = (rank + 1) % size; 
  for (int i = 1; i < ny + 1; ++i) {
     for (int j = 0; j < ncols; ++j) {
@@ -122,45 +128,9 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
      // tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
       float fromLeft; //toRight
       float fromRight; //toLeft
-      if(j == 0 || j == ncols - 1){
-      loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height]);// + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
-        if(j == 0){
-	       if(rank % 2 == 0){
-		 fromLeft = loc_image[(ncols - 1) + val_1];
-		 MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
-		 MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
-		 if(rank == MASTER) fromRight = 0;
-		 loc_tmp_image[j+val_1] += fromRight;
-	       }else{
-		 fromRight = loc_image[(ncols - 1) + val_1];
-		 MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
-			      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
-		 loc_tmp_image[j+val_1] += fromLeft;
-	       }
-	      }
-	      if(j == ncols - 1){
-		if(rank % 2 == 0){
-		  fromLeft = loc_image[val_1];          
-		  MPI_Recv(&fromRight,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
-		  MPI_Send(&fromLeft,1,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
-		  if(rank == size - 1) fromRight = 0;
-		  loc_tmp_image[j+val_1] += fromRight;
-		}
-		else{
-		 fromRight = loc_image[(ncols - 1) + val_1];
-		 MPI_Sendrecv(&fromRight,1, MPI_FLOAT,leftNeighbour,0,
-			      &fromLeft,1,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
-		 if(rank == size - 1) fromLeft = 0;
-		 loc_tmp_image[j+val_1] += fromLeft;
-		}
-	      }
-       }else{ 
-          loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
-       }
-
-         
+               
      }
-  }*/ 
+  } 
 }
 
 
