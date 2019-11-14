@@ -120,11 +120,96 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
 {
  int leftNeighbour = (rank == MASTER) ? (rank + size - 1 % size) : (rank - 1);
  int rightNeighbour = (rank + 1) % size; 
- for (int i = 1; i < ny + 1; ++i) {
+ for (int i = 0; i < ny; ++i) {
     for (int j = 0; j < ncols; ++j) {
       float a = 0.6;
       float b = 0.1;
       int val_1 = i * height;
+      //top and bottom are applied here to address ot of range issues
+      int top = i - 1;
+      int bottom = i + 1;
+      int left = j - 1;
+      int right = j + 1;
+      if(top < 0){
+        //loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i + 1) * height] + loc_image[j + 1 + val_1] );
+        // loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
+        if(left < 0){
+          float fromLeft;
+          loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i + 1) * height] + loc_image[j + 1 + val_1] );
+          //leftNeighbour's rightmost column is needed
+          if(rank % 2 == 0){
+            //send last col to right neighbour
+            MPI_Send(&loc_image[(ncols - 1)+i*height],sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+            //receive last col from left neighbour
+            MPI_Recv(&fromLeft,sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+          }else{
+           //receive last col from left neighbour
+           MPI_Recv(&fromLeft,sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+           //send last col to right neighbour
+           MPI_Send(&loc_image[(ncols - 1)+i*height],sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+          }
+          loc_tmp_image[j+val_1] += fromLeft;
+        }
+        else if(right > ncols){
+         //rightNeighbour's leftmost column is needed
+         float fromRight;
+         loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i + 1) * height] + loc_image[j + 1 + val_1] );
+         if(rank % 2 == 0){
+            //send first col to left neighbour
+            MPI_Send(&loc_image[i*height],sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+            //receive last col from right neighbour
+            MPI_Recv(&fromRight,sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+         }else{
+            //receive last col from right neighbour
+            MPI_Recv(&fromRight,sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+            //send first col to left neighbour
+            MPI_Send(&loc_image[i*height],sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+         }
+         loc_tmp_image[j+val_1] += fromRight;
+        }else{
+          loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
+        }
+      }
+      else if(bottom > ny){
+         if(left < 0){
+           float fromLeft;
+           loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + 1 + val_1] ); 
+         //leftNeighbour's rightmost column is needed
+          if(rank % 2 == 0){
+            //send last col to right neighbour
+            MPI_Send(&loc_image[(ncols - 1)+i*height],sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+            //receive last col from left neighbour
+            MPI_Recv(&fromLeft,sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+          }else{
+           //receive last col from left neighbour
+           MPI_Recv(&fromLeft,sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+           //send last col to right neighbour
+           MPI_Send(&loc_image[(ncols - 1)+i*height],sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+          }
+          loc_tmp_image[j+val_1] += fromLeft;
+       
+         }else if(right > ncols){
+           float fromRight;
+           loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j - 1 + val_1] );
+          if(rank % 2 == 0){
+            //send first col to left neighbour
+            MPI_Send(&loc_image[i*height],sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+            //receive last col from right neighbour
+            MPI_Recv(&fromRight,sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+          }else{
+            //receive last col from right neighbour
+            MPI_Recv(&fromRight,sizeof(float),MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+            //send first col to left neighbour
+            MPI_Send(&loc_image[i*height],sizeof(float),MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+         }
+         loc_tmp_image[j+val_1] += fromRight;
+         }else{
+           loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
+         }
+      }else{
+         loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
+      }
+      //loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
      // tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
       float fromLeft; //toRight
       float fromRight; //toLeft
