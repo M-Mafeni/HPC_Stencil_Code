@@ -119,7 +119,7 @@ for (int t = 0; t < niters; ++t) {
 void checkLeftAndRight(int rank,int i,int j,int height,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,MPI_Status *status){
     float a = 0.6;
     float b = 0.1;
-    int val_1 = i * height;
+    int cell = i + j * ncols;
     int left = j - 1;
     int right = j + 1;
     //loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
@@ -156,9 +156,14 @@ void checkLeftAndRight(int rank,int i,int j,int height,int ncols,int leftNeighbo
          }
          loc_tmp_image[j+val_1] += fromRight;
         }*/
+      //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
     if(left < 0){
+      //add right value
+      loc_tmp_image[cell] += b *loc_image[cell + ncols];
     }else if(right > ncols){
+       loc_tmp_image[cell] += b *loc_image[cell - ncols];
     }else{
+       loc_tmp_image[cell] += b * (loc_image[cell + ncols] + loc_image[cell - ncols]);
     }
 }
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int width, const int height,float* loc_image, float* loc_tmp_image,float* sendbuf, float* recvbuf)
@@ -178,20 +183,22 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       int bottom = i + 1;
       int left = j - 1;
       int right = j + 1;
-      //loc_tmp_image[j + val_1] =  0; 
+      int cell = i + j * ncols;
+      loc_tmp_image[cell] =  a * loc_image[cell];
+      //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
       if(top < 0){
        // printf("for rank %d, no top value adding val from index %d \n",rank,j + (i+1)*height);  
-     //   loc_tmp_image[j + val_1] += b* (loc_image[j + (i + 1) * height]); // only value you're sure of is the one below you
-        //check left and right
+         loc_tmp_image[cell] += b* (loc_image[cell + 1]); // only value you're sure of is the one below you
       }else if(bottom > ny){
        // printf("for rank %d, no bottom value adding val from index %d \n",rank,j + (i-1)*height); 
-      //  loc_tmp_image[j + val_1] += b* (loc_image[j + (i - 1) * height] );
-        //check left and right
+         loc_tmp_image[cell] += b* (loc_image[cell - 1] );
       }else{
        // printf("for rank %d, both values accounted from indexes %d and %d \n",rank,j + (i-1) * height,j + (i+1)*height);  
-      //  loc_tmp_image[j + val_1] += b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] );
-        //check left and right
+         loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }
+     //check left and right
+//  void checkLeftAndRight(int rank,int i,int j,int height,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,MPI_Status *status){
+     checkLeftAndRight(rank,i,j,height,ncols,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,status);
      //loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
      // tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
       float fromLeft; //toRight
