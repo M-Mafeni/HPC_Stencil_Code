@@ -80,6 +80,13 @@ int main(int argc, char* argv[])
   float* loc_image = malloc(sizeof(float) * ncols * ny); //ny to ignore padding
   float* loc_tmp_image = malloc(sizeof(float) * ncols * ny);
   if(rank == MASTER){
+     //copy part of loc image into image and temp image
+     for(int i = 0; i < ny; i++){
+       for(int j = 0; j < ncols; j++){
+         loc_image[i + j * ny] = image[(i+1) + (j + 1) * ny]; 
+         loc_tmp_image[i + j * ny] = tmp_image[(i+1) + (j + 1) * ny]; 
+       }
+      }
      printf("splitting grid in MASTER\n");
      for(int dest = 1; dest < size; dest++){
        int displacement = col_numbers[dest-1];
@@ -99,8 +106,8 @@ int main(int argc, char* argv[])
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
-   stencil(rank,size,&status,ncols, ny, width, ny, loc_image, loc_tmp_image,sendbuf,recvbuf);
-   stencil(rank,size,&status,ncols, ny, width, ny, loc_tmp_image, loc_image,sendbuf,recvbuf);
+  // stencil(rank,size,&status,ncols, ny, width, ny, loc_image, loc_tmp_image,sendbuf,recvbuf);
+  // stencil(rank,size,&status,ncols, ny, width, ny, loc_tmp_image, loc_image,sendbuf,recvbuf);
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * ny);
