@@ -15,7 +15,7 @@ void output_image(const char* file_name, const int nx, const int ny,
                   const int width, const int height, float* image);
 double wtime(void);
 int calc_ncols_from_rank(int rank, int size,int nx);
-void checkLeftAndRight(int rank,int i,int j,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status);
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status);
 void toAttach(){
     int i = 0;
 //    char hostname[256];
@@ -35,11 +35,9 @@ int main(int argc, char* argv[])
   int rank;               /* 'rank' of process among it's cohort */ 
   int size;               /* size of cohort, i.e. num processes started */
   int flag;               /* for checking whether MPI_Init() has been called */
-  int strlen;             /* length of a character array */
   MPI_Status status;
   float *sendbuf;
   float *recvbuf;
- // enum bool {FALSE,TRUE}; /* enumerated type: false = 0, true = 1 */  
   char hostname[MPI_MAX_PROCESSOR_NAME];  /* character array to hold hostname running process */
 
   /* initialise processes */
@@ -85,16 +83,12 @@ int main(int argc, char* argv[])
      printf("splitting grid in MASTER\n");
      for(int dest = 1; dest < size; dest++){
        int displacement = col_numbers[dest-1];
-     //  printf("sending part to rank %d, displacement %d \n",dest,displacement);
        MPI_Send(&image[1 + (displacement+1) * height],displacement * ny,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
        MPI_Send(&tmp_image[1 + (displacement+1) * height],displacement * ny,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
-     //  printf("message sent to rank %d\n",dest);
      }
    }else{
-   // printf("about to receive from master, rank %d, ncols %d \n",rank,ncols);
      MPI_Recv(loc_image,ncols * ny,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
      MPI_Recv(loc_tmp_image,ncols * ny,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
-    // printf("received from master, rank %d \n",rank);
    }
     
 
@@ -104,13 +98,11 @@ int main(int argc, char* argv[])
  recvbuf = malloc(sizeof(float) * height); // you are receiving one column
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
- //printf("testing from rank %d \n",rank);
-for (int t = 0; t < 1; ++t) {
+for (int t = 0; t < niters; ++t) {
    stencil(rank,size,&status,ncols, ny, width, ny, loc_image, loc_tmp_image,sendbuf,recvbuf);
    stencil(rank,size,&status,ncols, ny, width, ny, loc_tmp_image, loc_image,sendbuf,recvbuf);
   }
   double toc = wtime();
-//  float *test_img = malloc(sizeof(float) * ny * nx);
   printf("gathering... rank %d val %d\n",rank,ncols * ny);
   MPI_Gather(loc_image,(ncols* ny),MPI_FLOAT,
             &image[1 + height], (ncols* ny), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
@@ -136,7 +128,7 @@ for (int t = 0; t < 1; ++t) {
   MPI_Finalize();
   return 0;
 }
-void checkLeftAndRight(int rank,int i,int j,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status){
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status){
     float a = 0.6;
     float b = 0.1;
     int cell = i + j * ncols;
@@ -144,24 +136,15 @@ void checkLeftAndRight(int rank,int i,int j,int ncols,int leftNeighbour, int rig
     int right = j + 1;
     //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
     if(left < 0){
-      //add right value
-      loc_tmp_image[cell] += b *loc_image[cell + ncols];
-      float fromLeft = 0;
-      //leftNeighbour's rightmost column is needed
-      if(rank % 2 == 0){
-      }else{
-      }
-    loc_tmp_image[cell] += b*fromLeft;
+      //add leftmost_col[i]
+      float left_val = (rank == MASTER) ? 0 : leftmost_col[i];
+      loc_tmp_image[cell] += b *(loc_image[cell + ncols] + left_val);
     }else if(right == ncols){
-     //printf("right case for rank %d \n",rank);
-      loc_tmp_image[cell] += b *loc_image[cell - ncols];
-      float fromRight;
-      float test = 4.0;
-      if(rank % 2 == 0){
+      //add rightmost_col[i]
+      float right_val = (rank == size - 1) ? 0 : rightmost_col[i];
+      loc_tmp_image[cell] += b *(loc_image[cell - ncols] + right_val);
       }else{
-      }
-    }else{
-       loc_tmp_image[cell] += b * (loc_image[cell + ncols] + loc_image[cell - ncols]);
+      loc_tmp_image[cell] += b * (loc_image[cell + ncols] + loc_image[cell - ncols]);
     }
 }
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int width, const int height,float* loc_image, float* loc_tmp_image,float* sendbuf, float* recvbuf)
@@ -182,47 +165,26 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  if(rank % 2 == 0){
  //send left col to left neighbour
  //recv right col from right neighbour
- printf("rank %d: about to send leftmost col to rank %d \n",rank,leftNeighbour);
- printf("rank %d: about to receive rightmost col from rank %d \n",rank, rightNeighbour);
  MPI_Sendrecv(leftmost_col,ny,MPI_FLOAT,leftNeighbour,0,
          fromRight,ny,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
- printf("rank %d:sent leftmost col to rank %d \n",rank,leftNeighbour);
- printf("rank %d:received rightmost col from rank %d \n",rank, rightNeighbour);
 
  //recv left col from left neighbour
- printf("rank %d: about to receive leftmost col from rank %d \n",rank ,leftNeighbour);
  MPI_Recv(fromLeft,ny,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
- printf("rank %d:received leftmost col from rank %d \n",rank, leftNeighbour);
-
  //send right col to right neighbour
- printf("rank %d: about to send rightmost col to rank %d \n",rank,rightNeighbour);
  MPI_Send(rightmost_col,ny,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
- printf("rank %d:sent rightmost col to rank %d \n",rank,rightNeighbour);
  }else{
  //recv right col from right neighbour
- printf("rank %d: about to receive rightmost col from rank %d \n",rank, rightNeighbour);
  MPI_Recv(fromRight,ny,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
- printf("rank %d:received rightmost col from rank %d \n",rank, rightNeighbour);
-
  //send left col to left neighbour
- printf("rank %d: about to send leftmost col to rank %d \n",rank,leftNeighbour);
  MPI_Send(leftmost_col,ny,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
- printf("rank %d:sent leftmost col to rank %d \n",rank,leftNeighbour);
 
- printf("rank %d: about to send rightmost col to rank %d \n",rank,rightNeighbour);
- printf("rank %d: about to receive leftmost col from rank %d \n",rank ,leftNeighbour);
  MPI_Sendrecv(rightmost_col,ny,MPI_FLOAT,rightNeighbour,0,
             fromLeft,ny,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
- printf("rank %d:sent rightmost col to rank %d \n",rank,rightNeighbour);
- printf("rank %d:received leftmost col from rank %d \n",rank, leftNeighbour);
  }
- //printf("entering stencil for rank %d \n", rank);
   for (int i = 0; i < ny; ++i) {
     for (int j = 0; j < ncols; ++j) {
-   //   printf("rank %d row %d col %d \n",rank,i,j);
       float a = 0.6;
       float b = 0.1;
-      int val_1 = i * height;
       //top and bottom are applied here to address out of range issues
       int top = i - 1;
       int bottom = i + 1;
@@ -232,28 +194,21 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       loc_tmp_image[cell] =  a * loc_image[cell];
       //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
       if(top < 0){
-       // printf("for rank %d, no top value adding val from index %d \n",rank,j + (i+1)*height);  
          loc_tmp_image[cell] += b* (loc_image[cell + 1]); // only value you're sure of is the one below you
       }else if(bottom == ny){
-       // printf("for rank %d, no bottom value adding val from index %d \n",rank,j + (i-1)*height); 
          loc_tmp_image[cell] += b* (loc_image[cell - 1] );
       }else{
-       // printf("for rank %d, both values accounted from indexes %d and %d \n",rank,j + (i-1) * height,j + (i+1)*height);  
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }
      //check left and right
 //  void checkLeftAndRight(int rank,int i,int j,int height,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,MPI_Status *status){
-     checkLeftAndRight(rank,i,j,ncols,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,leftmost_col,rightmost_col,status);
-     //loc_tmp_image[j + val_1] =  loc_image[j + val_1] * a +b* (loc_image[j + (i - 1) * height] + loc_image[j + (i + 1) * height] + loc_image[j - 1 + val_1]  + loc_image[j + 1 + val_1] );
-     // tmp_image[j + val_1] =  image[j + val_1] * a +b* (image[j + (i - 1) * height] + image[j + (i + 1) * height] + image[j - 1 + val_1]  + image[j + 1 + val_1] );
-               
+     checkLeftAndRight(rank,size,i,j,ncols,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,leftmost_col,rightmost_col,status);
      }
   }
 /*  free(leftmost_col);
   free(rightmost_col);
   free(fromLeft);
   free(fromRight); */
-// printf("leaving stencil for rank %d \n", rank);
 }
 
 
