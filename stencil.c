@@ -106,8 +106,8 @@ int main(int argc, char* argv[])
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
-  // stencil(rank,size,&status,ncols, ny, width, ny, loc_image, loc_tmp_image,sendbuf,recvbuf);
-  // stencil(rank,size,&status,ncols, ny, width, ny, loc_tmp_image, loc_image,sendbuf,recvbuf);
+   stencil(rank,size,&status,ncols, ny, width, ny, loc_image, loc_tmp_image,sendbuf,recvbuf);
+   stencil(rank,size,&status,ncols, ny, width, ny, loc_tmp_image, loc_image,sendbuf,recvbuf);
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * ny);
@@ -123,14 +123,14 @@ for (int t = 0; t < niters; ++t) {
   }
   
 
- /* free(image);
+  free(image);
   free(tmp_image);
   free(loc_image);
   free(loc_tmp_image);
   free(displ);
   free(col_numbers);
   free(sendbuf);
-  free(recvbuf);*/
+  free(recvbuf);
   printf("rank %d has finished about to finalise \n",rank);
   MPI_Finalize();
   return 0;
@@ -209,13 +209,13 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       }
      //check left and right
 //  void checkLeftAndRight(int rank,int i,int j,int height,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,MPI_Status *status){
-     checkLeftAndRight(rank,size,i,j,ncols,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,leftmost_col,rightmost_col,status);
+     checkLeftAndRight(rank,size,i,j,ncols,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,fromLeft,fromRight,status);
      }
   }
-/*  free(leftmost_col);
+  free(leftmost_col);
   free(rightmost_col);
   free(fromLeft);
-  free(fromRight); */
+  free(fromRight); 
 }
 
 
