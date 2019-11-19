@@ -161,7 +161,7 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  //initialise leftmost and rightmost cols for message passing
  for(int a = 0; a < ny; a++){
   leftmost_col[a] = loc_image[a];
-  rightmost_col[a] = loc_image[a + (ncols - 1) * ncols];
+  rightmost_col[a] = loc_image[a + (ncols - 1) * ny];
  }
  //do message passing here
  if(rank % 2 == 0){
