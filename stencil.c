@@ -15,7 +15,7 @@ void output_image(const char* file_name, const int nx, const int ny,
                   const int width, const int height, float* image);
 double wtime(void);
 int calc_ncols_from_rank(int rank, int size,int nx);
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status);
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col);
 void toAttach(){
     int i = 0;
 //    char hostname[256];
@@ -131,8 +131,7 @@ for (int t = 0; t < niters; ++t) {
   MPI_Finalize();
   return 0;
 }
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status){
-    float a = 0.6;
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col){
     float b = 0.1;
     int cell = i + j * ny;
     int left = j - 1;
@@ -146,7 +145,7 @@ void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,int leftNe
       //add rightmost_col[i]
       float right_val = (rank == size - 1) ? 0 : rightmost_col[i];
       loc_tmp_image[cell] += b *(loc_image[cell - ncols] + right_val);
-      }else{
+    }else{
       loc_tmp_image[cell] += b * (loc_image[cell + ncols] + loc_image[cell - ncols]);
     }
 }
@@ -191,8 +190,6 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       //top and bottom are applied here to address out of range issues
       int top = i - 1;
       int bottom = i + 1;
-      int left = j - 1;
-      int right = j + 1;
       int cell = i + j * ny ;
       loc_tmp_image[cell] =  a * loc_image[cell];
       //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
@@ -204,7 +201,7 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }
      //check left and right
-     checkLeftAndRight(rank,size,i,j,ncols,ny,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,fromLeft,fromRight,status);
+     checkLeftAndRight(rank,size,i,j,ncols,ny,loc_image,loc_tmp_image,fromLeft,fromRight);
      }
   }
   free(leftmost_col);
