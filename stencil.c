@@ -140,13 +140,13 @@ void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,float* loc
     if(left < 0){
       //add leftmost_col[i]
       float left_val = (rank == MASTER) ? 0 : leftmost_col[i];
-      loc_tmp_image[cell] += b *(loc_image[cell + ncols] + left_val);
+      loc_tmp_image[cell] += b *(loc_image[cell + ny] + left_val);
     }else if(right == ncols){
       //add rightmost_col[i]
       float right_val = (rank == size - 1) ? 0 : rightmost_col[i];
-      loc_tmp_image[cell] += b *(loc_image[cell - ncols] + right_val);
+      loc_tmp_image[cell] += b *(loc_image[cell - ny] + right_val);
     }else{
-      loc_tmp_image[cell] += b * (loc_image[cell + ncols] + loc_image[cell - ncols]);
+      loc_tmp_image[cell] += b * (loc_image[cell + ny] + loc_image[cell - ny]);
     }
 }
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image)
