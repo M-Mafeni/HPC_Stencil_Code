@@ -8,14 +8,14 @@
 // Define output file name
 #define OUTPUT_FILE "stencil.pgm"
 
-void stencil(int rank,int size, MPI_Status *status,const int ncols, const int ny, const int width, const int height, float* loc_image, float* loc_tmp_image,float* sendbuf, float* recvbuf);
+void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image);
 void init_image(const int nx, const int ny, const int width, const int height,
                 float* image, float* tmp_image);
 void output_image(const char* file_name, const int nx, const int ny,
                   const int width, const int height, float* image);
 double wtime(void);
 int calc_ncols_from_rank(int rank, int size,int nx);
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status);
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status);
 void toAttach(){
     int i = 0;
 //    char hostname[256];
@@ -101,13 +101,11 @@ int main(int argc, char* argv[])
 
 
   // Call the stencil kernel
- sendbuf = malloc(sizeof(float) * height); // you are sending 1 column
- recvbuf = malloc(sizeof(float) * height); // you are receiving one column
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
-   stencil(rank,size,&status,ncols, ny, width, ny, loc_image, loc_tmp_image,sendbuf,recvbuf);
-   stencil(rank,size,&status,ncols, ny, width, ny, loc_tmp_image, loc_image,sendbuf,recvbuf);
+   stencil(rank,size,&status,ncols, ny, ny, loc_image, loc_tmp_image);
+   stencil(rank,size,&status,ncols, ny, ny, loc_tmp_image, loc_image);
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * ny);
@@ -129,16 +127,14 @@ for (int t = 0; t < niters; ++t) {
   free(loc_tmp_image);
   free(displ);
   free(col_numbers);
-  free(sendbuf);
-  free(recvbuf);
   printf("rank %d has finished about to finalise \n",rank);
   MPI_Finalize();
   return 0;
 }
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status){
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,MPI_Status *status){
     float a = 0.6;
     float b = 0.1;
-    int cell = i + j * ncols;
+    int cell = i + j * ny;
     int left = j - 1;
     int right = j + 1;
     //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
@@ -154,7 +150,7 @@ void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int leftNeighbour
       loc_tmp_image[cell] += b * (loc_image[cell + ncols] + loc_image[cell - ncols]);
     }
 }
-void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int width, const int height,float* loc_image, float* loc_tmp_image,float* sendbuf, float* recvbuf)
+void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image)
 {
  int leftNeighbour = (rank == MASTER) ? (size - 1) : (rank - 1);
  int rightNeighbour = (rank + 1) % size;
@@ -197,7 +193,7 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       int bottom = i + 1;
       int left = j - 1;
       int right = j + 1;
-      int cell = i + j * ncols;
+      int cell = i + j * ny ;
       loc_tmp_image[cell] =  a * loc_image[cell];
       //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
       if(top < 0){
@@ -208,8 +204,7 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }
      //check left and right
-//  void checkLeftAndRight(int rank,int i,int j,int height,int ncols,int leftNeighbour, int rightNeighbour,float* loc_image, float* loc_tmp_image,MPI_Status *status){
-     checkLeftAndRight(rank,size,i,j,ncols,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,fromLeft,fromRight,status);
+     checkLeftAndRight(rank,size,i,j,ncols,ny,leftNeighbour,rightNeighbour,loc_image,loc_tmp_image,fromLeft,fromRight,status);
      }
   }
   free(leftmost_col);
