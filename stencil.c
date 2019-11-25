@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
   // Call the stencil kernel
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
-for (int t = 0; t < 1; ++t) {
+for (int t = 0; t < niters; ++t) {
    stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image);
    stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image);
   }
@@ -114,7 +114,7 @@ for (int t = 0; t < 1; ++t) {
   if(rank == MASTER){
     for(int r = 0; r < height; r++){
       for(int c = 0; c < ncols; c++){
-        if(loc_image[r+c*height] != 0) printf(" row %d col %d \n",r,c);
+     //   if(loc_image[r+c*height] != 0) printf(" row %d col %d \n",r,c);
       }
     }
   }
@@ -209,11 +209,9 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       }else{
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }*/
-     //if(i == 515 && j == 255 && rank == MASTER) printf("testhhunbinb\n");
      loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      //check left and right
      checkLeftAndRight(rank,size,i,j,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
-     loc_tmp_image[cell] = 0;
      }
   }
   free(leftmost_col);
