@@ -81,17 +81,19 @@ int main(int argc, char* argv[])
   float* loc_tmp_image = malloc(sizeof(float) * ncols * height);
   if(rank == MASTER){
      //copy part of loc image into image and temp image
-     for(int i = 0; i < ny; i++){
-       for(int j = 0; j < ncols; j++){
-         loc_image[i + j * height] = image[(i+1) + (j + 1) * height]; 
-         loc_tmp_image[i + j * height] = tmp_image[(i+1) + (j + 1) * height]; 
+     for(int row = 0; row < ny; row++){
+       for(int col = 0; col < ncols; col++){
+         loc_image[row + col * height] = image[row + (col+1) * height]; 
+         loc_tmp_image[row + col * height] = tmp_image[row + (col+1) * height]; 
        }
       }
      printf("splitting grid in MASTER\n");
+     int displacement = 0;
      for(int dest = 1; dest < size; dest++){
-       int displacement = col_numbers[dest-1];
-       MPI_Send(&image[1 + (displacement + 1) * height],displacement * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
-       MPI_Send(&tmp_image[1 + (displacement + 1) * height],displacement * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
+       displacement += col_numbers[dest-1];
+       printf("test %d\n",(displacement + 1)* height);
+       MPI_Send(&image[ (displacement+1) * height],ncols * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
+       MPI_Send(&tmp_image[(displacement+1) * height],ncols * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
      }
    }else{
      MPI_Recv(loc_image,ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
@@ -105,12 +107,19 @@ int main(int argc, char* argv[])
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
   // stencil(rank,size,&status,ncols, ny, ny, loc_image, loc_tmp_image);
-  // stencil(rank,size,&status,ncols, ny, ny, loc_tmp_image, loc_image);
+ //  stencil(rank,size,&status,ncols, ny, ny, loc_tmp_image, loc_image);
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * ny);
+  if(rank == MASTER){
+    for(int r = 0; r < height; r++){
+      for(int c = 0; c < ncols; c++){
+     //   if(loc_image[r+c*height] != 0) printf(" row %d col %d \n",r,c);
+      }
+    }
+  }
   MPI_Gather(loc_image,(ncols* height),MPI_FLOAT,
-            &image[1 + height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
+            &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
   printf("gather completed rank %d \n",rank);
   if(rank == MASTER){
    // Output
@@ -131,22 +140,22 @@ for (int t = 0; t < niters; ++t) {
   MPI_Finalize();
   return 0;
 }
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col){
+void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int height,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col){
     float b = 0.1;
-    int cell = i + j * ny;
+    int cell = i + j * height;
     int left = j - 1;
     int right = j + 1;
     //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
     if(left < 0){
       //add leftmost_col[i]
       float left_val = (rank == MASTER) ? 0 : leftmost_col[i];
-      loc_tmp_image[cell] += b *(loc_image[cell + ny] + left_val);
+      loc_tmp_image[cell] += b *(loc_image[cell + height] + left_val);
     }else if(right == ncols){
       //add rightmost_col[i]
       float right_val = (rank == size - 1) ? 0 : rightmost_col[i];
-      loc_tmp_image[cell] += b *(loc_image[cell - ny] + right_val);
+      loc_tmp_image[cell] += b *(loc_image[cell - height] + right_val);
     }else{
-      loc_tmp_image[cell] += b * (loc_image[cell + ny] + loc_image[cell - ny]);
+      loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
     }
 }
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image)
@@ -193,16 +202,18 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       int cell = i + j * height ;
       loc_tmp_image[cell] =  a * loc_image[cell];
       //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
-      if(top < 0){
+     /* if(top < 0){
          loc_tmp_image[cell] += b* (loc_image[cell + 1]); // only value you're sure of is the one below you
       }else if(bottom == ny){
          loc_tmp_image[cell] += b* (loc_image[cell - 1] );
       }else{
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
-      }
+      }*/
+     //if(i == 515 && j == 255 && rank == MASTER) printf("test\n");
+     loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      //check left and right
      checkLeftAndRight(rank,size,i,j,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
-   //  loc_tmp_image[cell] = 0;
+     loc_tmp_image[cell] = 0;
      }
   }
   free(leftmost_col);
