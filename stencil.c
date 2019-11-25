@@ -168,9 +168,9 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  float *fromRight = malloc(sizeof(float) * height); //store rightmost col needed
  //i = row, j = col
  //initialise leftmost and rightmost cols for message passing
- for(int a = 1; a < ny + 1; a++){
+ for(int a = 0; a < height; a++){
   leftmost_col[a] = loc_image[a];
-  rightmost_col[a] = loc_image[a + (ncols - 1) * ny];
+  rightmost_col[a] = loc_image[a + (ncols - 1) * height];
  }
  //do message passing here
  if(rank % 2 == 0){
