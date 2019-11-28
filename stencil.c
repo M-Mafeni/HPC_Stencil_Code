@@ -194,14 +194,14 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  MPI_Sendrecv(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,
             fromLeft,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  }
-  for (int i = 1; i < ny + 1; ++i) {
-    for (int j = 0; j < ncols; ++j) {
+  for (int col = 0; col < ncols; ++col) {
+    for (int row = 1; row < ny + 1; ++row) {
       float a = 0.6;
       float b = 0.1;
       //top and bottom are applied here to address out of range issues
-      int top = i - 1;
-      int bottom = i + 1;
-      int cell = i + j * height ;
+      int top = row - 1;
+      int bottom = row + 1;
+      int cell = row + col * height ;
       loc_tmp_image[cell] =  a * loc_image[cell];
       //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
      /* if(top < 0){
@@ -212,7 +212,7 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }*/
      //check left and right
-     checkLeftAndRight(rank,size,i,j,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
+     checkLeftAndRight(rank,size,row,col,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
      loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      }
   }
