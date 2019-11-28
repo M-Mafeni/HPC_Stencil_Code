@@ -91,6 +91,7 @@ int main(int argc, char* argv[])
      int displacement = 0;
      for(int dest = 1; dest < size; dest++){
        displacement += col_numbers[dest-1];
+       displ[dest] = displacement * height;
        printf("test %d\n",(displacement + 1)* height);
        MPI_Send(&image[ (displacement+1) * height],col_numbers[dest] * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
        MPI_Send(&tmp_image[(displacement+1) * height],col_numbers[dest] * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
@@ -111,15 +112,16 @@ for (int t = 0; t < niters; ++t) {
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * height);
+  //multiply each element in col_numbers by height
   if(rank == MASTER){
-    for(int r = 0; r < height; r++){
-      for(int c = 0; c < ncols; c++){
-     //   if(loc_image[r+c*height] != 0) printf(" row %d col %d \n",r,c);
-      }
-    }
+   for(int i = 0; i < size; i++){
+     col_numbers[i] = col_numbers[i] * height;
+   }
   }
-  MPI_Gather(loc_image,(ncols* height),MPI_FLOAT,
-            &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
+  MPI_Gatherv(loc_image, ncols * height,MPI_FLOAT,
+              &image[height],col_numbers,displ,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
+ // MPI_Gather(loc_image,(ncols* height),MPI_FLOAT,
+   //         &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
   printf("gather completed rank %d \n",rank);
   if(rank == MASTER){
    // Output
@@ -209,9 +211,9 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       }else{
          loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
       }*/
-     loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      //check left and right
      checkLeftAndRight(rank,size,i,j,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
+     loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      }
   }
   free(leftmost_col);
