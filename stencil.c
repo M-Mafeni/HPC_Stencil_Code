@@ -77,12 +77,12 @@ int main(int argc, char* argv[])
   MPI_Gather(&ncols,1,MPI_INT,col_numbers,1,MPI_INT,MASTER,MPI_COMM_WORLD);
   if(rank == MASTER) printf("col__numbers: %d %d %d %d \n",col_numbers[0],col_numbers[1],col_numbers[2],col_numbers[3]);
   int loc_width = ncols + 2;
-  float* loc_image = malloc(sizeof(float) * ncols * height); //ny to ignore padding
-  float* loc_tmp_image = malloc(sizeof(float) * ncols * height);
+  float* loc_image = malloc(sizeof(float) * loc_width * height); 
+  float* loc_tmp_image = malloc(sizeof(float) * loc_width * height);
   if(rank == MASTER){
      //copy part of loc image into image and temp image
      for(int row = 0; row < ny; row++){
-       for(int col = 0; col < ncols; col++){
+       for(int col = 1; col < ncols + 1; col++){
          loc_image[row + col * height] = image[row + (col+1) * height]; 
          loc_tmp_image[row + col * height] = tmp_image[row + (col+1) * height]; 
        }
@@ -97,18 +97,31 @@ int main(int argc, char* argv[])
        MPI_Send(&tmp_image[(displacement+1) * height],col_numbers[dest] * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
      }
    }else{
-     MPI_Recv(loc_image,ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
-     MPI_Recv(loc_tmp_image,ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
+     MPI_Recv(&loc_image[height],ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
+     MPI_Recv(&loc_tmp_image[height],ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
    }
     
 
+  // Do sending and receiving
+ int leftNeighbour = (rank == MASTER) ? (size - 1) : (rank - 1);
+ int rightNeighbour = (rank + 1) % size;
+ float *leftmost_col = malloc(sizeof(float) * height);
+ float *rightmost_col = malloc(sizeof(float) * height);
+ float *fromLeft = malloc(sizeof(float) * height); //store leftmost col needed
+ float *fromRight = malloc(sizeof(float) * height); //store rightmost col needed
+ //i = row, j = col
+ //initialise leftmost and rightmost cols for message passing
+ for(int a = 0; a < height; a++){
+  leftmost_col[a] = loc_image[a];
+  rightmost_col[a] = loc_image[a + (ncols - 1) * height];
+ }
 
   // Call the stencil kernel
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
-   stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image);
-   stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image);
+  // stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image);
+  // stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image);
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * height);
@@ -118,7 +131,7 @@ for (int t = 0; t < niters; ++t) {
      col_numbers[i] = col_numbers[i] * height;
    }
   }
-  MPI_Gatherv(loc_image, ncols * height,MPI_FLOAT,
+  MPI_Gatherv(&loc_image[height], ncols * height,MPI_FLOAT,
               &image[height],col_numbers,displ,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
  // MPI_Gather(loc_image,(ncols* height),MPI_FLOAT,
    //         &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
