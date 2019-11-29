@@ -4,6 +4,7 @@
 #include "mpi.h"
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 #define MASTER 0
 // Define output file name
 #define OUTPUT_FILE "stencil.pgm"
@@ -65,7 +66,6 @@ int main(int argc, char* argv[])
     init_image(nx, ny, width, height, image, tmp_image);
   }
   //initialise values for process
- // printf("about to calc ncols rank %d \n",rank);
   int ncols = calc_ncols_from_rank(rank,size,nx); //nx to ignore padding
   //array to store ncol numbers
   int *col_numbers = NULL;
@@ -81,12 +81,13 @@ int main(int argc, char* argv[])
   float* loc_tmp_image = malloc(sizeof(float) * loc_width * height);
   if(rank == MASTER){
      //copy part of loc image into image and temp image
-     for(int row = 0; row < ny; row++){
+     /*for(int row = 0; row < ny; row++){
        for(int col = 1; col < ncols + 1; col++){
-         loc_image[row + col * height] = image[row + (col+1) * height]; 
-         loc_tmp_image[row + col * height] = tmp_image[row + (col+1) * height]; 
+         loc_image[row + col * height] = image[row + col * height]; 
+         loc_tmp_image[row + col * height] = tmp_image[row + col * height]; 
        }
-      }
+      }*/
+     memcpy(&loc_image[height],&image[height],sizeof(float) * ncols * height );
      printf("splitting grid in MASTER\n");
      int displacement = 0;
      for(int dest = 1; dest < size; dest++){
@@ -133,8 +134,8 @@ for (int t = 0; t < niters; ++t) {
   }
   MPI_Gatherv(&loc_image[height], ncols * height,MPI_FLOAT,
               &image[height],col_numbers,displ,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
- // MPI_Gather(loc_image,(ncols* height),MPI_FLOAT,
-   //         &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
+//  MPI_Gather(&loc_image[height],(ncols* height),MPI_FLOAT,
+  //          &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
   printf("gather completed rank %d \n",rank);
   if(rank == MASTER){
    // Output
