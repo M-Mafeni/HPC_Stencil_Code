@@ -121,8 +121,8 @@ int main(int argc, char* argv[])
  printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
-  // stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image);
-  // stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image);
+   stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image);
+   stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image);
   }
   double toc = wtime();
   printf("gathering... rank %d val %d\n",rank,ncols * height);
@@ -185,8 +185,8 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  //i = row, j = col
  //initialise leftmost and rightmost cols for message passing
  for(int a = 0; a < height; a++){
-  leftmost_col[a] = loc_image[a];
-  rightmost_col[a] = loc_image[a + (ncols - 1) * height];
+  leftmost_col[a] = loc_image[a + height];
+  rightmost_col[a] = loc_image[a + (ncols) * height];
  }
  //do message passing here
  if(rank % 2 == 0){
@@ -208,7 +208,12 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  MPI_Sendrecv(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,
             fromLeft,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  }
-  for (int col = 0; col < ncols; ++col) {
+  //copy back into loc image
+  for(int a = 0; a < height; a++){
+    loc_image[a] = (rank == MASTER) ? 0 : fromLeft[a];
+    loc_image[a + (ncols + 1) * height] = (rank == size - 1) ? 0 : fromRight[a];
+  }
+  for (int col = 1; col < ncols + 1; ++col) {
     for (int row = 1; row < ny + 1; ++row) {
       float a = 0.6;
       float b = 0.1;
@@ -218,15 +223,10 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       int cell = row + col * height ;
       loc_tmp_image[cell] =  a * loc_image[cell];
       //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
-     /* if(top < 0){
-         loc_tmp_image[cell] += b* (loc_image[cell + 1]); // only value you're sure of is the one below you
-      }else if(bottom == ny){
-         loc_tmp_image[cell] += b* (loc_image[cell - 1] );
-      }else{
-         loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
-      }*/
+    
      //check left and right
-     checkLeftAndRight(rank,size,row,col,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
+   //  checkLeftAndRight(rank,size,row,col,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
+     loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
      loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      }
   }
