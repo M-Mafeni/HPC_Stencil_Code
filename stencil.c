@@ -184,28 +184,30 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  float *fromRight = malloc(sizeof(float) * height); //store rightmost col needed
  //i = row, j = col
  //initialise leftmost and rightmost cols for message passing
- for(int a = 0; a < height; a++){
+ /*for(int a = 0; a < height; a++){
   leftmost_col[a] = loc_image[a + height];
   rightmost_col[a] = loc_image[a + (ncols) * height];
- }
+ }*/
  //do message passing here
+ //leftmost_col = loc_image[0];
+ //rightmost_col = loc_image[ncols * height];
  if(rank % 2 == 0){
  //send left col to left neighbour
  //recv right col from right neighbour
- MPI_Sendrecv(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,
+ MPI_Sendrecv(&loc_image[height],height,MPI_FLOAT,leftNeighbour,0,
          fromRight,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
 
  //recv left col from left neighbour
  MPI_Recv(fromLeft,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  //send right col to right neighbour
- MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+ MPI_Send(&loc_image[ncols*height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
  }else{
  //recv right col from right neighbour
  MPI_Recv(fromRight,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
  //send left col to left neighbour
- MPI_Send(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+ MPI_Send(&loc_image[height],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
 
- MPI_Sendrecv(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,
+ MPI_Sendrecv(&loc_image[ncols*height],height,MPI_FLOAT,rightNeighbour,0,
             fromLeft,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  }
   //copy back into loc image
