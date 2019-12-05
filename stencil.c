@@ -16,7 +16,6 @@ void output_image(const char* file_name, const int nx, const int ny,
                   const int width, const int height, float* image);
 double wtime(void);
 int calc_ncols_from_rank(int rank, int size,int nx);
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int ny,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col);
 
 int main(int argc, char* argv[])
 {
@@ -73,12 +72,6 @@ int main(int argc, char* argv[])
   float* loc_tmp_image = malloc(sizeof(float) * loc_width * height);
   if(rank == MASTER){
      //copy part of loc image into image and temp image
-     /*for(int row = 0; row < ny; row++){
-       for(int col = 1; col < ncols + 1; col++){
-         loc_image[row + col * height] = image[row + col * height]; 
-         loc_tmp_image[row + col * height] = tmp_image[row + col * height]; 
-       }
-      }*/
      memcpy(&loc_image[height],&image[height],sizeof(float) * ncols * height );
    //  printf("splitting grid in MASTER\n");
      int displacement = 0;
@@ -87,11 +80,9 @@ int main(int argc, char* argv[])
        displ[dest] = displacement * height;
     //   printf("test %d\n",(displacement + 1)* height);
        MPI_Send(&image[ (displacement+1) * height],col_numbers[dest] * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
-       MPI_Send(&tmp_image[(displacement+1) * height],col_numbers[dest] * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
      }
    }else{
      MPI_Recv(&loc_image[height],ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
-     MPI_Recv(&loc_tmp_image[height],ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
    }
     
 
@@ -126,8 +117,6 @@ for (int t = 0; t < niters; ++t) {
   }
   MPI_Gatherv(&loc_image[height], ncols * height,MPI_FLOAT,
               &image[height],col_numbers,displ,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
-//  MPI_Gather(&loc_image[height],(ncols* height),MPI_FLOAT,
-  //          &image[height], (ncols* height), MPI_FLOAT, MASTER,MPI_COMM_WORLD);
   //printf("gather completed rank %d \n",rank);
   if(rank == MASTER){
    // Output
@@ -148,39 +137,15 @@ for (int t = 0; t < niters; ++t) {
   MPI_Finalize();
   return 0;
 }
-void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int height,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col){
-    float b = 0.1;
-    int cell = i + j * height;
-    int left = j - 1;
-    int right = j + 1;
-    //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
-    if(left < 0){
-      //add leftmost_col[i]
-      float left_val = (rank == MASTER) ? 0 : leftmost_col[i];
-      loc_tmp_image[cell] += b *(loc_image[cell + height] + left_val);
-    }else if(right == ncols){
-      //add rightmost_col[i]
-      float right_val = (rank == size - 1) ? 0 : rightmost_col[i];
-      loc_tmp_image[cell] += b *(loc_image[cell - height] + right_val);
-    }else{
-      loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
-    }
-}
+
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,float* fromLeft, float* fromRight)
 {
  int leftNeighbour = (rank == MASTER) ? (size - 1) : (rank - 1);
  int rightNeighbour = (rank + 1) % size;
- //i = row, j = col
- //initialise leftmost and rightmost cols for message passing
- /*for(int a = 0; a < height; a++){
-  leftmost_col[a] = loc_image[a + height];
-  rightmost_col[a] = loc_image[a + (ncols) * height];
- }*/
+
  memcpy(leftmost_col,&loc_image[height],sizeof(float) *height);
  memcpy(rightmost_col,&loc_image[ncols *height],sizeof(float) *height);
  //do message passing here
- //leftmost_col = loc_image[height];
- //rightmost_col = loc_image[ncols * height];
  if(rank % 2 == 0){
  //send left col to left neighbour
  //recv right col from right neighbour
@@ -193,29 +158,20 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  //send right col to right neighbour
   if(rank != size - 1)MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
  }else{
- //recv right col from right neighbour
- if(rank != size - 1)MPI_Recv(&loc_image[(ncols+1)* height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
- //send left col to left neighbour
- if(rank != MASTER)MPI_Send(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+   //recv right col from right neighbour
+   if(rank != size - 1)MPI_Recv(&loc_image[(ncols+1)* height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+   //send left col to left neighbour
+   if(rank != MASTER)MPI_Send(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
 
- if(rank != size -1)MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
- if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+   if(rank != size -1)MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+   if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  }
-  //copy back into loc image
-  /*for(int a = 0; a < height; a++){
-    loc_image[a] = (rank == MASTER) ? 0 : fromLeft[a];
-    loc_image[a + (ncols + 1) * height] = (rank == size - 1) ? 0 : fromRight[a];
-  }*/
- // memcpy(&loc_image[0],fromLeft,sizeof(float) *height);
-//  memcpy(&loc_image[(ncols + 1) * height],fromRight,sizeof(float) *height);
-
+ 
   for (int col = 1; col < ncols + 1; ++col) {
     for (int row = 1; row < ny + 1; ++row) {
       float a = 0.6;
       float b = 0.1;
       //top and bottom are applied here to address out of range issues
-      int top = row - 1;
-      int bottom = row + 1;
       int cell = row + col * height ;
       loc_tmp_image[cell] =  a * loc_image[cell];
       loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
