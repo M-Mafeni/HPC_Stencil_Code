@@ -9,7 +9,7 @@
 // Define output file name
 #define OUTPUT_FILE "stencil.pgm"
 
-void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image);
+void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,float* fromLeft, float* fromRight);
 void init_image(const int nx, const int ny, const int width, const int height,
                 float* image, float* tmp_image);
 void output_image(const char* file_name, const int nx, const int ny,
@@ -104,17 +104,17 @@ int main(int argc, char* argv[])
  float *fromRight = malloc(sizeof(float) * height); //store rightmost col needed
  //i = row, j = col
  //initialise leftmost and rightmost cols for message passing
- for(int a = 0; a < height; a++){
-  leftmost_col[a] = loc_image[a];
-  rightmost_col[a] = loc_image[a + (ncols - 1) * height];
- }
-
+ 
+  for(int a = 0; a < height; a++){
+    loc_image[a] = 0;
+    loc_image[a + (ncols + 1) * height] = 0;
+  }
   // Call the stencil kernel
  //printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
  double tic = wtime();
 for (int t = 0; t < niters; ++t) {
-   stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image);
-   stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image);
+   stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image,leftmost_col,rightmost_col,fromLeft,fromRight);
+   stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image,leftmost_col,rightmost_col,fromLeft,fromRight);
   }
   double toc = wtime();
  // printf("gathering... rank %d val %d\n",rank,ncols * height);
@@ -166,47 +166,49 @@ void checkLeftAndRight(int rank,int size,int i,int j,int ncols,int height,float*
       loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
     }
 }
-void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image)
+void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,float* fromLeft, float* fromRight)
 {
  int leftNeighbour = (rank == MASTER) ? (size - 1) : (rank - 1);
  int rightNeighbour = (rank + 1) % size;
- float *leftmost_col = malloc(sizeof(float) * height);
- float *rightmost_col = malloc(sizeof(float) * height);
- float *fromLeft = malloc(sizeof(float) * height); //store leftmost col needed
- float *fromRight = malloc(sizeof(float) * height); //store rightmost col needed
  //i = row, j = col
  //initialise leftmost and rightmost cols for message passing
- for(int a = 0; a < height; a++){
+ /*for(int a = 0; a < height; a++){
   leftmost_col[a] = loc_image[a + height];
   rightmost_col[a] = loc_image[a + (ncols) * height];
- }
+ }*/
+ memcpy(leftmost_col,&loc_image[height],sizeof(float) *height);
+ memcpy(rightmost_col,&loc_image[ncols *height],sizeof(float) *height);
  //do message passing here
  //leftmost_col = loc_image[height];
  //rightmost_col = loc_image[ncols * height];
  if(rank % 2 == 0){
  //send left col to left neighbour
  //recv right col from right neighbour
- MPI_Sendrecv(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,
-         fromRight,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+ if(rank != MASTER)MPI_Send(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+
+ if(rank != size - 1)MPI_Recv(&loc_image[(ncols + 1) * height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
 
  //recv left col from left neighbour
- MPI_Recv(fromLeft,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+  if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  //send right col to right neighbour
- MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+  if(rank != size - 1)MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
  }else{
  //recv right col from right neighbour
- MPI_Recv(fromRight,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+ if(rank != size - 1)MPI_Recv(&loc_image[(ncols+1)* height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
  //send left col to left neighbour
- MPI_Send(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+ if(rank != MASTER)MPI_Send(leftmost_col,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
 
- MPI_Sendrecv(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,
-            fromLeft,height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+ if(rank != size -1)MPI_Send(rightmost_col,height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+ if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  }
   //copy back into loc image
-  for(int a = 0; a < height; a++){
+  /*for(int a = 0; a < height; a++){
     loc_image[a] = (rank == MASTER) ? 0 : fromLeft[a];
     loc_image[a + (ncols + 1) * height] = (rank == size - 1) ? 0 : fromRight[a];
-  }
+  }*/
+ // memcpy(&loc_image[0],fromLeft,sizeof(float) *height);
+//  memcpy(&loc_image[(ncols + 1) * height],fromRight,sizeof(float) *height);
+
   for (int col = 1; col < ncols + 1; ++col) {
     for (int row = 1; row < ny + 1; ++row) {
       float a = 0.6;
@@ -216,18 +218,10 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       int bottom = row + 1;
       int cell = row + col * height ;
       loc_tmp_image[cell] =  a * loc_image[cell];
-      //loc_tmp_image[cell] += b * (loc_image[cell + 1] + loc_image[cell - 1] + loc_image[cell - ncols] + loc_image[cell + ncols] 
-    
-     //check left and right
-   //  checkLeftAndRight(rank,size,row,col,ncols,height,loc_image,loc_tmp_image,fromLeft,fromRight);
-     loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
-     loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
+      loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
+      loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      }
   }
- // free(leftmost_col);
- // free(rightmost_col);
-  free(fromLeft);
-  free(fromRight); 
 }
 
 
