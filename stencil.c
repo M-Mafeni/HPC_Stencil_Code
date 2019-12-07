@@ -140,6 +140,8 @@ for (int t = 0; t < niters; ++t) {
 
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image,float* leftmost_col,float* rightmost_col,float* fromLeft, float* fromRight)
 {
+ //MPI_Request requests[2];
+ 
  int leftNeighbour = (rank == MASTER) ? (size - 1) : (rank - 1);
  int rightNeighbour = (rank + 1) % size;
 
@@ -173,9 +175,9 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
       float b = 0.1;
       //top and bottom are applied here to address out of range issues
       int cell = row + col * height ;
-      loc_tmp_image[cell] =  a * loc_image[cell];
-      loc_tmp_image[cell] += b * (loc_image[cell + height] + loc_image[cell - height]);
-      loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
+      //loc_tmp_image[cell] =  a * loc_image[cell];
+      loc_tmp_image[cell] = a * loc_image[cell] + b * (loc_image[cell + height] + loc_image[cell - height]+loc_image[cell + 1] + loc_image[cell - 1]);
+      //loc_tmp_image[cell] += b* (loc_image[cell + 1] + loc_image[cell - 1] );
      }
   }
 }
