@@ -51,7 +51,6 @@ int main(int argc, char* argv[])
    float* image = malloc(sizeof(float) * width * height);
    float* tmp_image = malloc(sizeof(float) * width * height);
    
- //if(rank == MASTER) toAttach();  
   if(rank == MASTER){
     // Set the input image
     init_image(nx, ny, width, height, image, tmp_image);
@@ -70,7 +69,28 @@ int main(int argc, char* argv[])
   int loc_width = ncols + 2;
   float* loc_image = malloc(sizeof(float) * loc_width * height); 
   float* loc_tmp_image = malloc(sizeof(float) * loc_width * height);
+  int displacement = 0;
+ if(rank == MASTER){
+   for(int dest = 1; dest < size; dest++){
+     displacement += col_numbers[dest-1];
+     displ[dest] = displacement * height;
+  }
+ }
+  
+  //calculate send counts
   if(rank == MASTER){
+    for(int i = 0; i < size; i++){
+      col_numbers[i] = col_numbers[i] * height;
+    }
+   }
+ 
+  
+  //double tic1 = wtime();
+  MPI_Scatterv(&image[height],col_numbers,displ,MPI_FLOAT,&loc_image[height],ncols*height,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
+  //double toc1 = wtime();
+  //if(rank == MASTER) printf("sending manually time : %lf\n",toc1 - tic1);
+
+  /*if(rank == MASTER){
      //copy part of loc image into image and temp image
      memcpy(&loc_image[height],&image[height],sizeof(float) * ncols * height );
    //  printf("splitting grid in MASTER\n");
@@ -81,14 +101,11 @@ int main(int argc, char* argv[])
     //   printf("test %d\n",(displacement + 1)* height);
        MPI_Send(&image[ (displacement+1) * height],col_numbers[dest] * height,MPI_FLOAT,dest,0,MPI_COMM_WORLD);
      }
+     printf("sending manually time : %lf\n",toc1 - tic1);
    }else{
      MPI_Recv(&loc_image[height],ncols * height,MPI_FLOAT,MASTER,0,MPI_COMM_WORLD,&status);
-   }
-  if(rank == MASTER){
-   for(int i = 0; i < size; i++){
-     col_numbers[i] = col_numbers[i] * height;
-   }
-  }
+   }*/ 
+  
     
 
   // Do sending and receiving
@@ -107,17 +124,20 @@ int main(int argc, char* argv[])
   }
   // Call the stencil kernel
  //printf("rank %d about to compute stencil function ncols %d ny %d \n",rank,ncols,ny);
- double tic = wtime();
+MPI_Barrier(MPI_COMM_WORLD); 
+double tic = wtime();
 for (int t = 0; t < niters; ++t) {
    stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image,leftmost_col,rightmost_col,fromLeft,fromRight);
    stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image,leftmost_col,rightmost_col,fromLeft,fromRight);
-  }
+ }
+  } 
+  MPI_Barrier(MPI_COMM_WORLD); 
+  double toc = wtime();
  // printf("gathering... rank %d val %d\n",rank,ncols * height);
   //multiply each element in col_numbers by height
   
   MPI_Gatherv(&loc_image[height], ncols * height,MPI_FLOAT,
               &image[height],col_numbers,displ,MPI_FLOAT,MASTER,MPI_COMM_WORLD);
-  double toc = wtime();
   //printf("gather completed rank %d \n",rank);
   if(rank == MASTER){
    // Output
