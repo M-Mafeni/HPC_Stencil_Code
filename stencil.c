@@ -129,8 +129,7 @@ double tic = wtime();
 for (int t = 0; t < niters; ++t) {
    stencil(rank,size,&status,ncols, ny, height, loc_image, loc_tmp_image,leftmost_col,rightmost_col,fromLeft,fromRight);
    stencil(rank,size,&status,ncols, ny, height, loc_tmp_image, loc_image,leftmost_col,rightmost_col,fromLeft,fromRight);
- }
-  } 
+ } 
   MPI_Barrier(MPI_COMM_WORLD); 
   double toc = wtime();
  // printf("gathering... rank %d val %d\n",rank,ncols * height);

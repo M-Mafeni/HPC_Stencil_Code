@@ -11,7 +11,7 @@ parser.add_argument('max', type=int, help='max no of cores')
 parser.add_argument('dim',type=int, help='dimensions of stencil file you want to generate')
 parser.add_argument('output_file',help = 'csv file to store output')
 args = parser.parse_args()
-csv_file = csv.writer(open(args.output_file,"a"),delimiter = ',')
+csv_file = csv.writer(open(args.output_file,"w"),delimiter = ',')
 csv_file.writerow(['no of cores','r1','r2','r3','r_avg'])
 for i in range(args.min,args.max+1):
     cmd = 'srun -n %d -p veryshort -A COMS30005 --reservation COMS30005 ./stencil %d %d 100 > temp.txt'
