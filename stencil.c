@@ -129,7 +129,7 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
  int rightNeighbour = (rank + 1) % size;
 
  //do message passing here
- if(rank % 2 == 0){
+
  //send left col to left neighbour
  //recv right col from right neighbour
  if(rank != MASTER)MPI_Send(&loc_image[height],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
@@ -140,16 +140,8 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
   if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  //send right col to right neighbour
   if(rank != size - 1)MPI_Send(&loc_image[ncols *height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
- }else{
-   //recv right col from right neighbour
-   if(rank != size - 1)MPI_Recv(&loc_image[(ncols+1)* height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
-   //send left col to left neighbour
-   if(rank != MASTER)MPI_Send(&loc_image[height],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
-
-   if(rank != size -1)MPI_Send(&loc_image[ncols *height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
-   if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
- }
  
+    
   for (int col = 1; col < ncols + 1; ++col) {
     for (int row = 1; row < ny + 1; ++row) {
       float a = 0.6;
