@@ -136,11 +136,11 @@ void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny,
 
  if(rank != size - 1)MPI_Recv(&loc_image[(ncols + 1) * height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
 
- //recv left col from left neighbour
-  if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
  //send right col to right neighbour
   if(rank != size - 1)MPI_Send(&loc_image[ncols *height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
  
+ //recv left col from left neighbour
+  if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
     
   for (int col = 1; col < ncols + 1; ++col) {
     for (int row = 1; row < ny + 1; ++row) {
