@@ -125,22 +125,22 @@ for (int t = 0; t < niters; ++t) {
 void stencil(int rank,int size,MPI_Status *status,const int ncols, const int ny, const int height,float* loc_image, float* loc_tmp_image)
 {
  
- int leftNeighbour = (rank == MASTER) ? (size - 1) : (rank - 1);
- int rightNeighbour = (rank + 1) % size;
+ int leftNeighbour = (rank == MASTER) ? (MPI_PROC_NULL) : (rank - 1);
+ int rightNeighbour = (rank == size - 1) ? MPI_PROC_NULL : (rank + 1) % size;
 
  //do message passing here
 
  //send left col to left neighbour
  //recv right col from right neighbour
- if(rank != MASTER)MPI_Send(&loc_image[height],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
+ MPI_Send(&loc_image[height],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD);
 
- if(rank != size - 1)MPI_Recv(&loc_image[(ncols + 1) * height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
+ MPI_Recv(&loc_image[(ncols + 1) * height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD,status);
 
  //send right col to right neighbour
-  if(rank != size - 1)MPI_Send(&loc_image[ncols *height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
+MPI_Send(&loc_image[ncols *height],height,MPI_FLOAT,rightNeighbour,0,MPI_COMM_WORLD);
  
  //recv left col from left neighbour
-  if(rank != MASTER)MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
+MPI_Recv(&loc_image[0],height,MPI_FLOAT,leftNeighbour,0,MPI_COMM_WORLD,status);
     
   for (int col = 1; col < ncols + 1; ++col) {
     for (int row = 1; row < ny + 1; ++row) {
